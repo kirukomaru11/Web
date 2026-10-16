@@ -1,0 +1,40 @@
+{
+    "app-id" : "io.github.kirukomaru11.Web",
+    "runtime" : "org.gnome.Platform",
+    "runtime-version" : "master",
+    "sdk" : "org.gnome.Sdk",
+    "command" : "web",
+    "finish-args" : [ "--device=dri", "--share=network", "--socket=pulseaudio", "--socket=wayland" ],
+    "modules" : [
+        {
+            "name": "transmission",
+            "buildsystem": "cmake-ninja",
+            "config-opts": [ "-DENABLE_CLI=OFF", "-DENABLE_QT=OFF", "-DENABLE_TESTS=OFF", "-DENABLE_MAC=OFF", "-DENABLE_DAEMON=ON", "-DENABLE_GTK=OFF" ],
+            "sources": [
+                {
+                    "type": "git",
+                    "url": "https://github.com/transmission/transmission",
+                    "tag": "4.1.3"
+                }
+            ]
+        },
+        {
+            "name" : "main",
+            "buildsystem" : "simple",
+            "build-commands" : [ "mv utils/* .", "env", "python ${FLATPAK_ID##*.}.py --install" ],
+            "sources" : [
+                {
+                    "type" : "git",
+                    "url" : "https://github.com/kirukomaru11/Web.git",
+                    "branch" : "main"
+                },
+                {
+                    "type" : "git",
+                    "url" : "https://github.com/kirukomaru11/Utils.git",
+                    "branch" : "main",
+                    "dest" : "utils"
+                }
+            ]
+        }
+    ]
+}
