@@ -1,7 +1,6 @@
 from os import environ
 
-old_data_home = environ["XDG_DATA_HOME"] or (environ["HOME"] + "/.local/share")
-environ["XDG_DATA_HOME"] = old_data_home + "/Web"
+environ["XDG_DATA_HOME"] = (environ.get("XDG_DATA_HOME", False) or (environ.get("HOME", f"/home/{environ.get('USER', 'user')}") + "/.local/share")) + "/Web"
 
 try:
     from Utils import *
