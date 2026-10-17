@@ -1016,13 +1016,11 @@ class ExtraSettings(Adw.PreferencesDialog):
 class WebKitFeatures(Adw.Dialog):
     __gtype_name__ = "WebKitFeatures"
 
-    settings = GObject.Property(type=WebKit.Settings)
+    settings = GObject.Property(type=WebKit.Settings, default=WebKit.Settings())
     status = GObject.Property(type=Adw.StatusPage)
 
     def __init__(self):
         self.__class__.instance = self
-        if not self.__class__.settings.default:
-            self.__class__.settings.default = WebKit.Settings()
         stack = Adw.ViewStack(vhomogeneous=False)
         view_switcher = Adw.ViewSwitcherSidebar(stack=stack)
         view_switcher.connect("activated", self.__class__.sidebar_activated)
@@ -1037,8 +1035,9 @@ class WebKitFeatures(Adw.Dialog):
         search.set_key_capture_widget(self)
         self.status = Adw.StatusPage(visible=False, icon_name="edit-find-symbolic")
         content.get_child().get_content().add_overlay(self.status)
-        l = self.settings.get_all_features()
-        for i in [l.get(i) for i in range(l.get_length())]:
+        f = self.settings.get_all_features()
+        l = [f.get(n) for n in range(f.get_length())]
+        for i in l:
             if i.get_identifier() == "ForceCompositingMode":
                 i.get_default_value = return_true
             if not i.get_category() in categories:
@@ -1074,6 +1073,7 @@ class WebKitFeatures(Adw.Dialog):
     @staticmethod
     def search_changed(s):
         stack = s.get_ancestor(Adw.ToolbarView).get_content().get_child().get_child().get_child()
+        if not stack.get_ancestor(WebKitFeatures): return
         s = s.get_text().lower()
         for box in stack:
             for group in box:
@@ -1604,6 +1604,7 @@ search > stack > text { margin: 0px 10px; }
 .searches listview row { margin: 0px; padding: 0px; }
 .searches listview row label { padding: 0px 8px; border-radius: 9px; }
 .searches > contents > box { border-spacing: 10px; }
+.searches scrolledwindow scrollbar range trough slider { min-height: 18px; }
 
 :drop(active) label.highlight { box-shadow: 0 0 0 1px var(--accent-bg-color) inset; }
 """
