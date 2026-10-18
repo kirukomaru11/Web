@@ -1569,6 +1569,7 @@ APP_CSS = r"""
 .downloads download box { margin: 0px; border-spacing: 6px; }
 .downloads listview { border-spacing: 8px; padding: 0px; }
 .downloads listview row { margin: 0px; padding: 0px; background: color-mix(in srgb, currentColor 5%, transparent); }
+.downloads scrolledwindow scrollbar range trough slider { min-height: 28px; }
 
 dialog.settings stack > box { padding: 14px; border-spacing: 14px; }
 
