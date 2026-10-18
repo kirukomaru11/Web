@@ -5,11 +5,12 @@
     "sdk" : "org.gnome.Sdk",
     "command" : "web",
     "finish-args" : [ "--device=dri", "--share=network", "--socket=pulseaudio", "--socket=wayland" ],
+    "cleanup": [ "/share/doc", "/share/licenses", "/lib/debug", "/lib/systemd" ],
     "modules" : [
         {
             "name": "transmission",
             "buildsystem": "cmake-ninja",
-            "config-opts": [ "-DENABLE_CLI=OFF", "-DENABLE_QT=OFF", "-DENABLE_TESTS=OFF", "-DENABLE_MAC=OFF", "-DENABLE_DAEMON=ON", "-DENABLE_GTK=OFF" ],
+            "config-opts": [ "-DENABLE_GTK=OFF", "-DENABLE_QT=OFF", "-DENABLE_MAC=OFF", "-DENABLE_TESTS=OFF", "-DINSTALL_DOC=OFF", "-DWITH_SYSTEMD=OFF" ],
             "sources": [
                 {
                     "type": "git",
