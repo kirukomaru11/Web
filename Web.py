@@ -1016,10 +1016,11 @@ class ExtraSettings(Adw.PreferencesDialog):
 class WebKitFeatures(Adw.Dialog):
     __gtype_name__ = "WebKitFeatures"
 
-    settings = GObject.Property(type=WebKit.Settings, default=WebKit.Settings())
+    settings = GObject.Property(type=WebKit.Settings)
     status = GObject.Property(type=Adw.StatusPage)
 
     def __init__(self):
+        self.__class__.settings.default = WebKit.Settings()
         self.__class__.instance = self
         stack = Adw.ViewStack(vhomogeneous=False)
         view_switcher = Adw.ViewSwitcherSidebar(stack=stack)
