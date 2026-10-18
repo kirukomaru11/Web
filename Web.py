@@ -667,7 +667,7 @@ class History(ListObject):
     @staticmethod
     def init_list():
         if not hasattr(History, "list"):
-            History.list = List(History, "uri")
+            History.list = List(History, unique="uri", static=True)
 
     @staticmethod
     def set(u, t):
@@ -689,8 +689,8 @@ class SearchObject(ListObject):
         old_name = self.name
         self._name = value
         if old_name:
-            if not self in Searches.list.default.get_model(): return
             App.default.data.update(table="Searches", column="Name", value=self.name, conditions="Name = ?", conds=(old_name,))
+            Task.invoke(Searches.list.default.get_model().do_dict)
 
     url = GObject.Property(type=str)
     shortcut = GObject.Property(type=str)
@@ -740,7 +740,7 @@ class Searches(Gtk.Popover):
     __gtype_name__ = "Searches"
 
     model = GObject.Property(type=Gtk.SingleSelection)
-    list = GObject.Property(type=Gtk.SortListModel, default=Gtk.SortListModel(sorter=Gtk.NumericSorter(expression=Gtk.PropertyExpression.new(SearchObject, None, "id")), model=List(SearchObject, "name")))
+    list = GObject.Property(type=Gtk.SortListModel, default=Gtk.SortListModel(sorter=Gtk.NumericSorter(expression=Gtk.PropertyExpression.new(SearchObject, None, "id")), model=List(SearchObject, unique="name", static=True)))
 
     def __init__(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
