@@ -487,7 +487,9 @@ class Tab(Adw.Bin):
         if not view.get_selected_page(): return
         self = view.get_selected_page().get_child()
         first_setup = not self.webview and self.tab
-        if first_setup: self.setup_view()
+        if first_setup:
+            if self.uri.startswith("magnet:?"): open_files([self.uri])
+            else: self.setup_view()
         if not first_setup and isinstance(self.get_child(), Adw.Spinner): Task.invoke(self.webview.load_uri, self.uri)
         else: Task.invoke(self.sync)
 
@@ -866,6 +868,9 @@ class Search(Adw.Bin):
             if not t: return
             t = t.get_child()
             if not t: return
+            if self.search.get_text().startswith("magnet:?"):
+                open_files([self.search.get_text()])
+                return True
             t.webview.load_uri(self.search.get_text())
             self.search.search = ""
             Task.invoke(self.search.toggle)
@@ -919,8 +924,10 @@ class Search(Adw.Bin):
             except Exception as e:
                 print(e)
                 preview_text = GLib.markup_escape_text(t.split("://", 1)[-1].split("/", 1)[0])
+        elif t.startswith("magnet:?"):
+            preview_text = GLib.markup_escape_text(preview_text.rsplit("=", 1)[-1])
         else:
-            preview_text = preview_text.rsplit("/", 1)[-1]
+            preview_text = GLib.markup_escape_text(preview_text.rsplit("/", 1)[-1])
         self.preview.set_label(preview_text if preview_text else "Search")
         self.autocomplete.set_text(t, p)
 
@@ -1545,7 +1552,7 @@ def open_files(files):
             open_transmission()
             if i.startswith("file://"):
                 i = uri_decode(i)
-            GLib.spawn_command_line_sync(TRANSMISSION.replace("daemon", "remote") + f" --add '{i}'")
+            Task.invoke(GLib.spawn_command_line_sync, TRANSMISSION.replace("daemon", "remote") + f" --add '{i}'")
         else: Tab.create(uri=(("file://" if not i.startswith(("file://", "https://", "http://")) else "") + i))
     return App.default.get_active_window().present()
 
