@@ -1366,7 +1366,7 @@ class NetworkSession:
         cls._default.set_memory_pressure_settings(WebContext.memory_pressure_settings)
         cls._default.set_persistent_credential_storage_enabled(False)
         cls._default.set_tls_errors_policy(WebKit.TLSErrorsPolicy.IGNORE)
-        cls._default.get_cookie_manager().set_persistent_storage(App.default.data_folder.get_child("storage/cookies").peek_path(), WebKit.CookiePersistentStorage.TEXT)
+        cls._default.get_cookie_manager().set_persistent_storage(App.default.data_folder.get_child("cookies").peek_path(), WebKit.CookiePersistentStorage.TEXT)
         cls._default.connect("download-started", Downloads.handle_started)
         return cls._default
 
