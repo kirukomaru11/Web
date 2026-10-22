@@ -146,7 +146,7 @@ class Window(Window):
     def on_key_pressed(e, v, kc, s):
         self = e.get_widget()
         if self.search.searches.model.get_selected_item() and (v == Gdk.KEY_Escape or v == Gdk.KEY_BackSpace and not self.search.text.get_text()):
-            self.search.searches.set_selected("")
+            self.search.searches.set_selected()
             return True
         if v == Gdk.KEY_Escape:
             if self.search.autocomplete.get_mapped(): return
@@ -391,6 +391,7 @@ class Tab(Adw.Bin):
             w.find.entry.set_position(-1)
         w.search.search = ""
         w.search.set_text(self.uri)
+        if w.search.text.get_mapped() and not w.get_focus() == w.search.text: w.search.toggle(sync=False)
         w.prev_button.set_sensitive(self.webview.can_go_back())
         w.next_button.set_sensitive(self.webview.can_go_forward())
         if not self.uri or self.uri == "about:blank": self.set_child(Adw.StatusPage(title="Start Browsing", icon_name="applications-internet-symbolic", description="This is an empty page"))
@@ -819,7 +820,7 @@ class Searches(Gtk.Popover):
         if t in Searches.list.default.get_model(): return Toast(f"{t} already exists")
         Searches.list.default.get_model()[d.get_title()].name = t
 
-    def set_selected(self, name):
+    def set_selected(self, name=""):
         l = [self.model.get_item(i).name for i in range(self.model.get_n_items())]
         self.model.select_item(l.index(name) if name and name in l else Gtk.INVALID_LIST_POSITION, True)
 
@@ -908,12 +909,16 @@ class Search(Adw.Bin):
     def focus(*_):
         s = App.default.get_active_window().search
         if not s.text.get_mapped(): s.toggle()
-        s.search = ""
-        s.autocomplete.set_text("")
-        s.text.grab_focus()
+        Task.invoke(s.text.grab_focus)
+        Task.invoke(s.text.select_region, 0, -1)
 
     def set_text(self, t="", p=-1):
         t = WebKit.uri_for_display(t) or ""
+        s = [i for i in Searches.list.default.get_model() if i.url and i.url.endswith("%QUERY%") and t.startswith(i.url.replace("%QUERY%", ""))]
+        if s:
+            t = GLib.Uri.unescape_string(t.split(s[0].url.replace("%QUERY%", ""), 1)[-1].split("&", 1)[0].replace("+", " "))
+            self.searches.set_selected(s[0].name)
+        else: self.searches.set_selected()
         preview_text = t.split("://", 1)[-1]
         if is_online(t):
             preview_text = preview_text.split("/", 1)[0]
@@ -930,19 +935,23 @@ class Search(Adw.Bin):
             preview_text = GLib.markup_escape_text(preview_text.rsplit("/", 1)[-1])
         self.preview.set_label(preview_text if preview_text else "Search")
         self.autocomplete.set_text(t, p)
+        self.get_ancestor(Gtk.Revealer).set_reveal_child(True)
 
     def get_text(self, complete=True):
         s = self.text.get_text()
-        if self.searches.model.get_selected_item(): return self.searches.model.get_selected_item().url.replace("%QUERY%", s)
+        if self.searches.model.get_selected_item(): return self.searches.model.get_selected_item().url.replace("%QUERY%", GLib.Uri.escape_string(s))
         elif complete and s and not "://" in s:
             s = ("file://" if s.startswith("/") else "https://") + s
         return s
 
-    def toggle(self, *_):
-        self.get_root().stack.get_visible_child().get_selected_page().get_child().sync()
+    def toggle(self, *_, sync=True):
+        if sync: self.get_root().stack.get_visible_child().get_selected_page().get_child().sync()
         self.get_child().set_visible_child_name("Editing" if self.get_child().get_visible_child_name() == "Preview" else "Preview")
+        self.remove_css_class("editing")
+        self.remove_css_class("preview")
+        self.add_css_class(self.get_child().get_visible_child_name().lower())
         self.get_ancestor(Gtk.Revealer).set_reveal_child(True)
-        self.get_child().get_visible_child().grab_focus()
+        if self.get_child().get_visible_child_name() == "Editing": Task.invoke(self.text.grab_focus)
 
 class ExtraSettings(Adw.PreferencesDialog):
     __gtype_name__ = "ExtraSettings"
@@ -1603,10 +1612,9 @@ search {
 }
 search button { outline: none; font-weight: normal; }
 search placeholder { opacity: var(--dim-opacity); }
-search.has-search { outline-color: var(--search-color); }
-search.has-search,
-search:not(.has-search):focus-within { outline-width: 2px; outline-offset: -2px; }
-search:not(.has-search):focus-within { outline-color: color-mix(in srgb, var(--accent-color) 50%, transparent); }
+search.editing.has-search { outline-color: var(--search-color); }
+search.editing:focus-within { outline-width: 2px; outline-offset: -2px; }
+search.editing:not(.has-search):focus-within { outline-color: color-mix(in srgb, var(--accent-color) 50%, transparent); }
 search > stack > text { margin: 0px 10px; }
 
 .searches listview { margin: 0px; padding: 0px; }
