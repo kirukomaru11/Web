@@ -509,7 +509,7 @@ class Tab(Adw.Bin):
             Task.invoke(t.unload)
         if "set-preferred-languages" in a.get_name():
             group = Adw.PreferencesGroup()
-            r = TagRow(tags=t.webview.get_context().preferred_languages if t.webview and hasattr(t.webview.get_context(), "preferred_languages") else getattr(WebContext.default, "preferred_languages", None))
+            r = TagRow(tags=t.webview.get_context().preferred_languages if t.webview and hasattr(t.webview.get_context(), "preferred_languages") else getattr(WebContext.default, "preferred_languages", None), title="Languages")
             group.add(r)
             p = Prompt(heading="Preferred Languages", callback=Tab.do_preferred_languages, extra_child=group)
             p.tab = t
