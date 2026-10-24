@@ -9,7 +9,8 @@ except ModuleNotFoundError:
         from .Utils import *
     except ModuleNotFoundError:
         print("No Utils")
-        exit()
+        import sys
+        sys.exit()
 
 from gi.repository import WebKit
 
@@ -1650,9 +1651,9 @@ SHORTCUTS = {
             "Open URIs": "app.open-uris",
             "WebKit Features": "app.webkit-features",
             "Extra Settings": "app.extra-settings",
-            "Find": "win.find-bar",
-            "Fullscreen": "win.fullscreen",
-            "Second Bar": "win.second-view"
+            "Find": "<primary>f",
+            "Fullscreen": "F11",
+            "Second Bar": "<primary><shift>b"
         }
 }
 
