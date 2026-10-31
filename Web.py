@@ -1416,15 +1416,19 @@ class UserContentManager:
                 if i in identifiers: continue
                 a.save_from_file(i, Gio.File.new_for_path(Path(f, i)), None, UserContentManager.save_add_filter)
         l = []
-        f = Path(App.default.data_folder, "style.css")
-        if exists(f): l.append(f)
+        for i in list_dir(App.default.data_folder):
+            if i.endswith(".css"): l.append(Path(App.default.data_folder, i))
         f = Path(App.default.data_folder, "styles")
         if exists(f):
             for i in list_dir(f): l.append(Path(f, i))
         for i in l: UserContentManager.default.add_style_sheet(WebKit.UserStyleSheet.new(get_contents(i).decode(), WebKit.UserContentInjectedFrames.ALL_FRAMES, WebKit.UserStyleLevel.USER))
+        l = []
+        for i in list_dir(App.default.data_folder):
+            if i.endswith(".js"): l.append(Path(App.default.data_folder, i))
         f = Path(App.default.data_folder, "scripts")
         if exists(f):
-            for i in list_dir(f): UserContentManager.default.add_script(WebKit.UserScript.new(get_contents(Path(f, i)).decode(), WebKit.UserContentInjectedFrames.ALL_FRAMES, WebKit.UserScriptInjectionTime.START))
+            for i in list_dir(f): l.append(Path(f, i))
+        for i in l: UserContentManager.default.add_script(WebKit.UserScript.new(get_contents(i).decode(), WebKit.UserContentInjectedFrames.ALL_FRAMES, WebKit.UserScriptInjectionTime.START))
 
     @staticmethod
     def do_remove(a, r): a.remove_finish(r)
