@@ -21,8 +21,6 @@ from gi.repository.Soup import tld_get_base_domain
 from re import compile as Regex
 
 class Window(Window):
-    __gtype_name__ = "Window"
-
     drop_target_gtypes = (Gdk.FileList, Gio.File, Gtk.Label)
     prev_button = GObject.Property(type=Gtk.Button)
     next_button = GObject.Property(type=Gtk.Button)
@@ -290,8 +288,6 @@ class Window(Window):
         if hasattr(self, "highlight") and self.highlight: self.highlight.remove_css_class("highlight")
 
 class Tab(Adw.Bin):
-    __gtype_name__ = "Tab"
-
     @GObject.Property(type=str, flags=GObject.ParamFlags.READWRITE)
     def uri(self): return getattr(self, "_uri", "")
 
@@ -315,7 +311,7 @@ class Tab(Adw.Bin):
     context_menu = Menu({"!a": Menu({"New Tab": "new-tab", "New Window": "new-window", "Reopen Closed Tab": "reopen-tab"}), "!b": Menu()})
 
     def __init__(self, view=False, webview=False, uri=False):
-        super().__init__(css_name=self.__gtype_name__.lower())
+        super().__init__(css_name=self.__class__.__name__.lower())
         v = view or Window.current.stack.get_visible_child()
         view = view or Window.current.stack.get_first_child()
         current_tab = v.get_selected_page().get_child() if v.get_selected_page() else False
@@ -653,7 +649,6 @@ class Tab(Adw.Bin):
         d.request = None
 
 class History(ListObject):
-    __gtype_name__ = "History"
     title = GObject.Property(type=str)
     uri = GObject.Property(type=str)
 
@@ -682,7 +677,6 @@ class History(ListObject):
         else: History.list.append({"uri": u, "title": t})
 
 class SearchObject(ListObject):
-    __gtype_name__ = "SearchObject"
     id = GObject.Property(type=int, nick="ID", default=0)
 
     @GObject.Property(type=str)
@@ -741,8 +735,6 @@ class SearchObject(ListObject):
     factory.connect("teardown", teardown)
 
 class Searches(Gtk.Popover):
-    __gtype_name__ = "Searches"
-
     model = GObject.Property(type=Gtk.SingleSelection)
     list = GObject.Property(type=Gtk.SortListModel, default=Gtk.SortListModel(sorter=Gtk.NumericSorter(expression=Gtk.PropertyExpression.new(SearchObject, None, "id")), model=List(SearchObject, unique="name", static=True)))
 
@@ -760,7 +752,7 @@ class Searches(Gtk.Popover):
         self.list.bind_property("n-items", box.get_last_child(), "visible", DEFAULT_BIND, bool_bind)
         box.append(Button(callback=SearchObject.new, label="Add New Search", css_classes=["flat"]))
         box.get_last_child().get_first_child().set_xalign(0)
-        self.add_css_class(self.__gtype_name__.lower())
+        self.add_css_class(self.__class__.__name__.lower())
 
     @staticmethod
     def selected_changed(l, p, self):
@@ -826,8 +818,6 @@ class Searches(Gtk.Popover):
         self.model.select_item(l.index(name) if name and name in l else Gtk.INVALID_LIST_POSITION, True)
 
 class Search(Adw.Bin):
-    __gtype_name__ = "Search"
-
     text = GObject.Property(type=Gtk.Text)
     preview = GObject.Property(type=Gtk.Button)
     autocomplete = GObject.Property(type=Autocomplete)
@@ -955,7 +945,6 @@ class Search(Adw.Bin):
         if self.get_child().get_visible_child_name() == "Editing": Task.invoke(self.text.grab_focus)
 
 class ExtraSettings(Adw.PreferencesDialog):
-    __gtype_name__ = "ExtraSettings"
     zoom = GObject.Property(type=Adw.SpinRow)
     background_color = GObject.Property(type=ColorRow)
     cache_model = GObject.Property(type=Adw.ComboRow)
@@ -1031,8 +1020,6 @@ class ExtraSettings(Adw.PreferencesDialog):
         ExtraSettings.instance.present()
 
 class WebKitFeatures(Adw.Dialog):
-    __gtype_name__ = "WebKitFeatures"
-
     settings = GObject.Property(type=WebKit.Settings)
     status = GObject.Property(type=Adw.StatusPage)
 
@@ -1125,8 +1112,6 @@ class WebKitFeatures(Adw.Dialog):
     def sidebar_activated(v): v.get_ancestor(Adw.NavigationSplitView).set_show_content(True)
 
 class SiteDataExceptions(Adw.Dialog):
-    __gtype_name__ = "SiteDataExceptions"
-
     tags = GObject.Property(type=TagRow)
 
     def __init__(self):
@@ -1168,8 +1153,6 @@ class SiteDataExceptions(Adw.Dialog):
     def clear(e=None): NetworkSession().get_website_data_manager().fetch(WebKit.WebsiteDataTypes.ALL, None, SiteDataExceptions.finish_fetch, e)
 
 class ViewFind(Gtk.Box):
-    __gtype_name__ = "ViewFind"
-
     options = GObject.Property(type=Gtk.Box)
     previous = GObject.Property(type=Gtk.Button)
     entry = GObject.Property(type=Gtk.SearchEntry)
@@ -1235,7 +1218,6 @@ class ViewFind(Gtk.Box):
         else: f.search_previous()
 
 class Download(Gtk.Box):
-    __gtype_name__ = "Download"
     download = GObject.Property(type=WebKit.Download)
     progress = GObject.Property(type=Gtk.ProgressBar)
     label = GObject.Property(type=Gtk.Label)
@@ -1302,8 +1284,6 @@ class Download(Gtk.Box):
     factory.connect("teardown", teardown)
 
 class Downloads(Gtk.Revealer):
-    __gtype_name__ = "Downloads"
-
     downloads = List(WebKit.Download)
 
     def __init__(self):
