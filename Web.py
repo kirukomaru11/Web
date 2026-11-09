@@ -653,17 +653,6 @@ class History(ListObject):
     uri = GObject.Property(type=str)
 
     @staticmethod
-    def title_bind(b, v):
-        self = b.get_property("source")
-        if not self: return ""
-        if self.uri.startswith("file://"):
-            t = GLib.markup_escape_text(uri_decode(self.uri))
-        else:
-            t = GLib.markup_escape_text(self.uri.split("://", 1)[-1].rstrip("/"))
-        if self.title and not self.uri == self.title: return (f"<b>{self.title}</b> • " + t).strip()
-        else: return t
-
-    @staticmethod
     def init_list():
         if not hasattr(History, "list"):
             History.list = List(History, unique="uri", static=True)
@@ -817,6 +806,23 @@ class Searches(Gtk.Popover):
         l = [self.model.get_item(i).name for i in range(self.model.get_n_items())]
         self.model.select_item(l.index(name) if name and name in l else Gtk.INVALID_LIST_POSITION, True)
 
+class SearchAutocompleteItem(ListItem):
+    def __init__(self): super().__init__(child=Gtk.Label(use_markup=True, xalign=0))
+
+    def bind(self):
+        self.bindings = [self.item.bind_property("title", self.get_child(), "label", DEFAULT_BIND, SearchAutocompleteItem.text_bind)]
+
+    @staticmethod
+    def text_bind(b, v):
+        self = b.get_property("source")
+        if not self: return ""
+        if self.uri.startswith("file://"):
+            t = GLib.markup_escape_text(uri_decode(self.uri))
+        else:
+            t = GLib.markup_escape_text(self.uri.split("://", 1)[-1].rstrip("/"))
+        if self.title and not self.uri == self.title: return (f"<b>{self.title}</b> • " + t).strip()
+        else: return t
+
 class Search(Adw.Bin):
     text = GObject.Property(type=Gtk.Text)
     preview = GObject.Property(type=Gtk.Button)
@@ -833,7 +839,7 @@ class Search(Adw.Bin):
         self.preview.get_first_child().set_properties(use_markup=True, ellipsize=Pango.EllipsizeMode.END, xalign=0.50, hexpand=True)
         self.get_child().add_named(self.preview, "Preview")
         self.get_child().add_named(self.text, "Editing")
-        self.autocomplete = Autocomplete(self.text, select=self.__class__.select, model=List(History), bind=self.__class__.bind, setup=self.__class__.setup, text_activate=self.__class__.text_activate, row_activate=self.__class__.row_activate, complete=self.__class__.complete)
+        self.autocomplete = Autocomplete(self.text, select=self.__class__.select, model=List(History), factory=SearchAutocompleteItem.factory, text_activate=self.__class__.text_activate, row_activate=self.__class__.row_activate, complete=self.__class__.complete)
 
     @staticmethod
     def row_activate(text, autocomplete, item):
@@ -885,13 +891,6 @@ class Search(Adw.Bin):
             t = uri_decode(uri_relative_encode(t))
             l = [History(title=basename(i), uri=uri_relative_encode(i.rstrip("/") or "/")) for i in Search.completer.get_completions(t)]
         autocomplete.model.replace(l)
-
-    @staticmethod
-    def setup(f, l): l.set_child(Gtk.Label(use_markup=True, xalign=0))
-
-    @staticmethod
-    def bind(f, l):
-        l.get_child().bindings = [l.get_property("item").bind_property("title", l.get_child(), "label", DEFAULT_BIND, History.title_bind)]
 
     @staticmethod
     def select(text, autocomplete, item): return autocomplete.set_text(item.uri)
