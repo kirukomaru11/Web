@@ -1147,7 +1147,7 @@ class ViewFind(Gtk.Box):
     next = GObject.Property(type=Gtk.Button)
 
     def __init__(self):
-        super().__init__(css_classes=("linked", ), css_name="find")
+        super().__init__(css_classes=("linked", "dark-blur-background"), css_name="find")
         self.options = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         for i in dir(WebKit.FindOptions):
             if i.isupper():
@@ -1546,7 +1546,7 @@ dialog.settings stack > box { padding: 14px; border-spacing: 14px; }
 
 dialog tagrow { margin: 10px; }
 
-find { margin: 10px 0px; backdrop-filter: blur(20px) brightness(0.9); background: color-mix(in srgb, var(--window-bg-color) 35%, transparent); border-radius: 9px; }
+find { margin: 10px 0px; border-radius: 9px; }
 find popover button { outline: none; font-weight: normal; }
 
 tabbar:not(.visible) separator { opacity: 0; }
