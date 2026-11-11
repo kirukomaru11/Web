@@ -699,32 +699,17 @@ class SearchObject(ListObject):
             v = v.to_string()
         App.default.data.update(table="Searches", column=p, value=v, conditions="Name = ?", conds=(self.name,))
 
-    @staticmethod
-    def setup(f, l): l.set_child(Gtk.Label(xalign=0))
-
-    @staticmethod
-    def bind(f, l):
-        if not l.get_child(): return
-        l.get_child().bindings = [l.get_property("item").bind_property("name", l.get_child(), "label", DEFAULT_BIND)]
-
-    @staticmethod
-    def unbind(f, l):
-        for i in getattr(l.get_child(), "bindings", []): i.unbind()
-        if hasattr(l.get_child(), "bindings"): del l.get_child().bindings
-
-    @staticmethod
-    def teardown(f, l): l.set_child(None)
-
     def new(*_):
         name = unique_name("New Search", Searches.list.default.get_model())
         App.default.data.new(table="Searches", values=(name,), names=("Name",))
         Searches.list.default.get_model().add(App.default.data.read(table="Searches", conds=(name,), conditions="Name = ?", return_dict=True))
 
-    factory = Gtk.SignalListItemFactory.new()
-    factory.connect("setup", setup)
-    factory.connect("bind", bind)
-    factory.connect("unbind", unbind)
-    factory.connect("teardown", teardown)
+class SearchItem(ListItem):
+    parent_options = False
+    def __init__(self): super().__init__(child=Gtk.Label(xalign=0))
+
+    def bind(self):
+        self.bindings = [self.item.bind_property("name", self.get_child(), "label", DEFAULT_BIND)]
 
 class Searches(Gtk.Popover):
     model = GObject.Property(type=Gtk.SingleSelection)
@@ -736,7 +721,7 @@ class Searches(Gtk.Popover):
         self.model = Gtk.SingleSelection(autoselect=False, can_unselect=True)
         self.model.connect("notify::selected", self.__class__.selected_changed, self)
         self.bind_property("list", self.model, "model", DEFAULT_BIND)
-        listview = Gtk.ListView(model=self.model, factory=SearchObject.factory)
+        listview = Gtk.ListView(model=self.model, factory=SearchItem.factory)
         listview.set_css_classes(["navigation-sidebar"])
         listview.connect("activate", self.__class__.row_activate)
         box.append(Gtk.ScrolledWindow(propagate_natural_height=True, propagate_natural_width=True, child=listview))
