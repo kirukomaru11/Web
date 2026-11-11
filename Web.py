@@ -679,9 +679,12 @@ class SearchObject(ListObject):
             App.default.data.update(table="Searches", column="Name", value=self.name, conditions="Name = ?", conds=(old_name,))
             Task.invoke(Searches.list.default.get_model().do_dict)
 
-    url = GObject.Property(type=str)
+    url = GObject.Property(type=str, nick="URL")
     shortcut = GObject.Property(type=str)
     color = GObject.Property(type=RGBA)
+
+    table = "Searches"
+    properties = ["id", "name", "url", "shortcut", "color"]
 
     def color_from(self, v): return RGBA(v)
 
@@ -1216,33 +1219,26 @@ class ViewFind(Gtk.Box):
         if "Next" in b.get_tooltip_text(): f.search_next()
         else: f.search_previous()
 
-class Download(Gtk.Box):
-    download = GObject.Property(type=WebKit.Download)
+class Download(ListItem):
     progress = GObject.Property(type=Gtk.ProgressBar)
     label = GObject.Property(type=Gtk.Label)
     def __init__(self):
-        super().__init__(css_name="download", orientation=Gtk.Orientation.VERTICAL)
-        self.bindings = []
-        self.connect("notify::download", self.__class__.download_changed)
+        super().__init__(css_name="download", child=Gtk.Box(orientation=Gtk.Orientation.VERTICAL))
         box = Gtk.Box(hexpand=True)
         box.append(Button(css_classes=["circular"], icon_name="folder-open", tooltip_text="Open Folder", callback=self.__class__.open_folder))
         self.label = Gtk.Label(hexpand=True, single_line_mode=True, ellipsize=Pango.EllipsizeMode.END)
         self.label.bind_property("label", self.label, "tooltip-text", DEFAULT_BIND)
         box.append(self.label)
         box.append(Button(css_classes=["circular"], icon_name="process-stop", tooltip_text="Remove", callback=self.__class__.remove))
-        self.append(box)
+        self.get_child().append(box)
         self.progress = Gtk.ProgressBar()
         self.progress.bind_property("fraction", self.progress, "visible", DEFAULT_BIND, self.__class__.progress_bind)
-        self.append(self.progress)
+        self.get_child().append(self.progress)
 
-    @staticmethod
-    def download_changed(self, p=None):
-        for i in self.bindings: i.unbind()
-        self.bindings = []
-        if self.download:
-            self.bindings.append(self.download.bind_property("estimated-progress", self.progress, "tooltip-text", DEFAULT_BIND, self.__class__.progress_tooltip_bind))
-            self.bindings.append(self.download.bind_property("estimated-progress", self.progress, "fraction", DEFAULT_BIND))
-            self.bindings.append(self.download.bind_property("destination", self.label, "label", DEFAULT_BIND, self.__class__.label_bind))
+    def bind(self):
+        self.bindings.append(self.item.bind_property("estimated-progress", self.progress, "tooltip-text", DEFAULT_BIND, self.__class__.progress_tooltip_bind))
+        self.bindings.append(self.item.bind_property("estimated-progress", self.progress, "fraction", DEFAULT_BIND))
+        self.bindings.append(self.item.bind_property("destination", self.label, "label", DEFAULT_BIND, self.__class__.label_bind))
 
     @staticmethod
     def label_bind(b, v): return basename(v) if v else ""
@@ -1257,30 +1253,18 @@ class Download(Gtk.Box):
     def progress_bind(b, v): return v != 1.0
 
     @staticmethod
-    def open_folder(b): launch(b.get_ancestor(Download).download.get_destination(), folder=True)
+    def open_folder(b):
+        self = b.get_ancestor(Download)
+        if not getattr(self, "item", False): return
+        launch(self.item.get_destination(), folder=True)
 
     @staticmethod
     def remove(b):
         self = b.get_ancestor(Download)
-        if not self.download.get_estimated_progress() == 1.0: self.download.cancel()
-        Downloads.downloads.remove(self.download)
+        if not getattr(self, "item", False): return
+        if not self.item.get_estimated_progress() == 1.0: self.item.cancel()
+        Downloads.downloads.remove(self.item)
 
-    factory = Gtk.SignalListItemFactory.new()
-    @staticmethod
-    def setup(f, l): l.set_child(Download())
-    factory.connect("setup", setup)
-    @staticmethod
-    def bind(f, l):
-        Task.invoke(l.get_child().get_parent().set_properties, css_classes=[], focusable=False)
-        l.get_child().download = l.get_property("item")
-    factory.connect("bind", bind)
-    @staticmethod
-    def unbind(f, l):
-        l.get_child().download = None
-    factory.connect("unbind", unbind)
-    @staticmethod
-    def teardown(f, l): l.set_child(None)
-    factory.connect("teardown", teardown)
 
 class Downloads(Gtk.Revealer):
     downloads = List(WebKit.Download)
@@ -1640,12 +1624,11 @@ SHORTCUTS = {
         }
 }
 
-DATA_INIT = """
-CREATE TABLE IF NOT EXISTS Searches (ID INTEGER, Name TEXT NOT NULL UNIQUE, URL TEXT, Shortcut TEXT, Color TEXT);
+DATA_INIT = (SearchObject, """
 CREATE TABLE IF NOT EXISTS Settings (Key TEXT PRIMARY KEY NOT NULL, Value TEXT);
 CREATE TABLE IF NOT EXISTS Tabs (Window INTEGER NOT NULL DEFAULT 1, TabView INTEGER NOT NULL DEFAULT 1, ID INTEGER, URI TEXT DEFAULT '', UNIQUE ('Window', 'TabView', 'ID'), FOREIGN KEY (Window) REFERENCES Windows(ID) ON DELETE CASCADE ON UPDATE CASCADE);
 CREATE TABLE IF NOT EXISTS Windows (ID INTEGER PRIMARY KEY AUTOINCREMENT, 'Default Width' INTEGER NOT NULL DEFAULT 360, 'Default Height' INTEGER NOT NULL DEFAULT 760, 'Fullscreen' INTEGER NOT NULL DEFAULT 0, 'Second View' INTEGER NOT NULL DEFAULT 1, Maximized INTEGER NOT NULL DEFAULT 0);
-"""
+""")
 
 ACTIONS = [
     ("open-transmission", open_transmission),
