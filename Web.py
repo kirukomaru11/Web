@@ -685,6 +685,7 @@ class SearchObject(ListObject):
 
     table = "Searches"
     properties = ["id", "name", "url", "shortcut", "color"]
+    properties_extra = {"Color": "TEXT"}
 
     def color_from(self, v): return RGBA(v)
 
