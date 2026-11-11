@@ -1534,9 +1534,9 @@ TRANSMISSION = "/app/bin/transmission-daemon" if FLATPAK_ID else "/usr/bin/trans
 
 APP_CSS = r"""
 .downloads popover { min-width: 360px; }
-.downloads download { padding: 6px; border-spacing: 8px; }
+.downloads download > box { padding: 6px; border-spacing: 8px; }
 .downloads download progressbar { padding: 0px 2px;}
-.downloads download box { margin: 0px; border-spacing: 6px; }
+.downloads download > box box { margin: 0px; border-spacing: 6px; }
 .downloads listview { border-spacing: 8px; padding: 0px; }
 .downloads listview row { margin: 0px; padding: 0px; background: color-mix(in srgb, currentColor 5%, transparent); }
 .downloads scrolledwindow scrollbar range trough slider { min-height: 28px; }
