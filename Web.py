@@ -1610,8 +1610,7 @@ SHORTCUTS = {
         }
 }
 
-DATA_INIT = (SearchObject, """
-CREATE TABLE IF NOT EXISTS Settings (Key TEXT PRIMARY KEY NOT NULL, Value TEXT);
+DATA_INIT = (SearchObject, DataSetting, """
 CREATE TABLE IF NOT EXISTS Tabs (Window INTEGER NOT NULL DEFAULT 1, TabView INTEGER NOT NULL DEFAULT 1, ID INTEGER, URI TEXT DEFAULT '', UNIQUE ('Window', 'TabView', 'ID'), FOREIGN KEY (Window) REFERENCES Windows(ID) ON DELETE CASCADE ON UPDATE CASCADE);
 CREATE TABLE IF NOT EXISTS Windows (ID INTEGER PRIMARY KEY AUTOINCREMENT, 'Default Width' INTEGER NOT NULL DEFAULT 360, 'Default Height' INTEGER NOT NULL DEFAULT 760, 'Fullscreen' INTEGER NOT NULL DEFAULT 0, 'Second View' INTEGER NOT NULL DEFAULT 1, Maximized INTEGER NOT NULL DEFAULT 0);
 """)
@@ -1644,7 +1643,7 @@ def main():
        window_removed=window_removed,
        data_folder=Gio.File.new_for_path(get_parent(DATA)),
        actions=ACTIONS)
-    for i, v in {"uBlock Filters": False}.items(): App.default.data.persist_action(App.default, i, (i, v), "Settings", "Value", "Key = ?", (i,))
+    for i, v in {"uBlock Filters": False}.items(): DataSetting.persist_action(App.default, i, i, v)
     App.default.lookup_action("ublock-filters").connect("notify::state", UserContentManager.ublock_filters)
     App.default.add_action(Gio.SimpleAction.new("context-search", get_variant("").get_type()))
     App.default.lookup_action("context-search").connect("activate", Tab.context_search)
