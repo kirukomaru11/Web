@@ -20,7 +20,7 @@ from gi.repository.Soup import tld_get_base_domain
 
 from re import compile as Regex
 
-class Window(Window):
+class Window(DataWindow):
     drop_target_gtypes = (Gdk.FileList, Gio.File, Gtk.Label)
     prev_button = GObject.Property(type=Gtk.Button)
     next_button = GObject.Property(type=Gtk.Button)
@@ -33,8 +33,11 @@ class Window(Window):
     bar = GObject.Property(type=Gtk.ProgressBar)
     find = GObject.Property(type=Gtk.Widget)
     downloads = GObject.Property(type=Gtk.Widget)
+    fullscreen = GObject.Property(type=bool, default=False)
+    second_view = GObject.Property(type=bool, default=True)
+    properties = ["fullscreen", "second_view"]
 
-    def __init__(self, _id=None, tabs=None):
+    def __init__(self, data=None, tabs=None):
         tabs = tabs or []
         if not hasattr(self.__class__, "menu"):
             a = {}
@@ -42,16 +45,14 @@ class Window(Window):
                 a["Open Transmission"] = "open-transmission"
             a.update({"uBlock Filters": "ublock-filters", "Extra Settings": "extra-settings", "WebKit Features": "webkit-features", "Site Data Exceptions": "site-data-exceptions"})
             self.__class__.menu = Menu({"!a": Menu({"Open URIs": "open-uris"}), "!b": Menu({"Fullscreen": "win.fullscreen", "Find Bar": "win.find-bar", "Second View": "win.second-view", "New Window": "new-window", "View Open Tabs": "overview", "Reopen Closed Tab": "reopen-tab"}), "!c": Menu(a), "!d": App.default.default_menu})
-        super().__init__()
+        super().__init__(data)
         self.stack = Gtk.Stack()
         self.search = Search()
         self.wide, self.narrow = [Adw.ToolbarView(content=Adw.LayoutSlot.new("content")) for _ in range(2)]
-        if not _id: App.default.data.set_default(table="Windows", conditions="ID = ?", conds=(self.get_id(),), names=("ID", ), values=(self.get_id(),))
-        elif self.get_id() != _id: App.default.data.update(table="Windows", column="ID", value=self.get_id(), conditions="ID = ?", conds=(_id,))
         self.next_button = Button(sensitive=False, icon_name="go-next", tooltip_text="Next", callback=Tab.nav_history)
         self.prev_button = Button(sensitive=False, icon_name="go-previous", tooltip_text="Back", callback=Tab.nav_history)
         multi = Adw.MultiLayoutView()
-        bookmarks_view, view = tuple(Adw.TabView(menu_model=Tab.context_menu, focusable=True) for _ in range(2))
+        view, bookmarks_view = tuple(View(menu_model=Tab.context_menu, name=str(n + 1)) for n in range(2))
         for i in (view, bookmarks_view): self.stack.add_child(i)
         overlay = Gtk.Overlay(child=self.stack)
         self.bar = Gtk.ProgressBar()
@@ -73,36 +74,27 @@ class Window(Window):
         narrow_header = Adw.HeaderBar(show_title=False, show_end_title_buttons=False)
         self.wide.add_top_bar(wide_header)
         for i in (Adw.LayoutSlot.new("search"), narrow_header): self.narrow.add_bottom_bar(i)
-        for i in ("Default Width", "Default Height"): App.default.data.persist_action(self, i, 1, "Windows", i, "ID = ?", (self.get_id(),)).bind_property("state", self, i.lower().replace(" ", "-"), SYNC_BIND, unpack_bind, variant_bind)
-        App.default.data.persist_action(self, "Maximized", False, "Windows", "Maximized", "ID = ?", (self.get_id(),)).bind_property("state", self, "maximized", SYNC_BIND, unpack_bind, variant_bind)
-        App.default.data.persist_action(self, "Second View", True, "Windows", "Second View", "ID = ?", (self.get_id(),))
         for i, n in ((self.wide, "wide"), (self.narrow, "narrow")):
             ToolbarFullscreen(i)
             multi.add_layout(Adw.Layout(content=i, name=n))
-        App.default.data.persist_action(self, "Fullscreen", False, "Windows", "Fullscreen", "ID = ?", (self.get_id(),)).connect("notify::state", self.change_fullscreen)
         for i in (wide_header, narrow_header):
             i.pack_start(Adw.LayoutSlot.new("start"))
             i.pack_end(Adw.LayoutSlot.new("menu"))
             i.pack_end(Adw.LayoutSlot.new("downloads"))
         wide_header.pack_start(Button(icon_name="tab-new", tooltip_text="New Tab", action_name="app.new-tab"))
-        for i in App.default.data.read(table="Tabs", conditions="Window = ?", conds=(self.get_id(),), return_dict=True, force_tuple=True): Tab.create(view=bookmarks_view if i["TabView"] == 2 else view, uri=i["URI"])
-        for i in tabs: Tab.create(webview=i[0], view=self.stack.get_first_child() if i[1] == 0 else self.stack.get_last_child(), uri=i[2])
-        if not self.stack.get_first_child().get_selected_page(): Tab.create(view=self.stack.get_first_child())
         for i in self.stack:
-            i.bar = Adw.TabBar(autohide=i != bookmarks_view, view=i)
+            i.bar = Adw.TabBar(autohide=i != bookmarks_view, view=i.get_child())
+            i.bar.get_first_child().connect("notify::reveal-child", self.__class__.reveal_tab_bar)
             if i == bookmarks_view:
                 i.bar.get_first_child().bind_property("reveal-child", self.stack.get_first_child().bar, "autohide", INVERT_BIND)
-                self.lookup_action("second-view").bind_property("state", i.bar.get_first_child(), "reveal-child", SYNC_BIND, unpack_bind, variant_bind)
+                self.bind_property("second-view", i.bar.get_first_child(), "reveal-child", SYNC_BIND)
             self.wide.add_top_bar(i.bar)
-            i.overview = Adw.TabOverview(child=multi if i == view else view.overview, enable_new_tab=True, view=i, secondary_menu=Window.menu)
+            i.overview = Adw.TabOverview(child=multi if i == view else view.overview, enable_new_tab=True, view=i.bar.get_view(), secondary_menu=Window.menu)
             i.overview.connect("create-tab", self.__class__.overview_create_tab)
-            tb = Adw.TabButton(view=i)
-            if i == bookmarks_view:  self.lookup_action("second-view").bind_property("state", tb, "visible", SYNC_BIND, unpack_bind, variant_bind)
+            tb = Adw.TabButton(view=i.bar.get_view())
+            if i == bookmarks_view: self.bind_property("second-view", tb, "visible", SYNC_BIND)
             tb.connect("clicked", self.__class__.tab_button_clicked)
             narrow_header.pack_start(tb)
-            i.connect("notify::selected-page", Tab.changed)
-            i.connect("notify::n-pages", Tab.idle_save_all)
-            i.connect("page-reordered", Tab.idle_save_all)
             i.connect("setup-menu", Tab.setup_menu)
             i.connect("create-window", self.__class__.create)
             i.connect("close-page", Tab.operation)
@@ -112,12 +104,18 @@ class Window(Window):
         self.add_breakpoint(b)
         self.stack.connect("notify::visible-child", self.__class__.child_changed)
         self.__class__.child_changed(self.stack, None)
-        bookmarks_view.bar.get_first_child().connect("notify::reveal-child", self.__class__.reveal_bookmarks_bar)
         self.set_content(self.stack.get_last_child().overview)
-        Task.invoke(bookmarks_view.bar.get_first_child().set_reveal_child, self.lookup_action("second-view").get_state().unpack())
-        Task.invoke(self.__class__.reveal_bookmarks_bar, bookmarks_view.bar.get_first_child())
+        for i in ("second-view", "fullscreen"):
+            self.add_stateful_actions((i, get_variant(getattr(self, i.replace("-", "_")))))
+            self.bind_property(i, self.lookup_action(i), "state", SYNC_BIND, variant_bind, unpack_bind)
+        self.connect("notify::fullscreen", self.change_fullscreen)
         self.change_fullscreen()
+        for v in self.stack:
+            for i in v.restore(Tab): Tab.create(view=v, uri=i["URI"])
+        for i in tabs: Tab.create(webview=i[0], view=self.stack.get_first_child() if i[1] == 0 else self.stack.get_last_child(), uri=i[2])
+        if not self.stack.get_first_child().get_selected_page(): Tab.create(view=self.stack.get_first_child())
         self.present()
+        Task.invoke(bookmarks_view.bar.get_first_child().set_reveal_child, self.second_view)
 
     def update_css_size(self, b):
         if not self.get_current_breakpoint(): self.add_css_class("small")
@@ -177,16 +175,18 @@ class Window(Window):
             self.search.text.grab_focus()
 
     @staticmethod
-    def on_map(w): Tab.changed(w.stack.get_visible_child())
+    def on_map(self):
+        self.stack.get_visible_child().page_changed()
+        for i in self.stack: self.__class__.reveal_tab_bar(i.bar.get_first_child())
 
     @staticmethod
-    def reveal_bookmarks_bar(a, p=None): GLib.timeout_add(200, a.get_ancestor(Adw.TabBar).get_template_child(Adw.TabBar, "scrolled_window").get_hadjustment().set_value, 0)
+    def reveal_tab_bar(a, p=None): GLib.timeout_add(280, a.get_ancestor(Adw.TabBar).get_template_child(Adw.TabBar, "scrolled_window").get_hadjustment().set_value, 0)
 
     @staticmethod
     def tab_button_clicked(b):
         if not b.get_view().get_n_pages(): Tab.create(view=b.get_view())
-        b.get_view().get_parent().set_visible_child(b.get_view())
-        b.get_view().overview.set_open(not b.get_view().overview.get_open())
+        b.get_view().get_ancestor(Gtk.Stack).set_visible_child(b.get_view().get_parent())
+        b.get_view().get_parent().overview.set_open(not b.get_view().get_parent().overview.get_open())
 
     @staticmethod
     def overview_create_tab(*_): return Tab.create().tab
@@ -218,7 +218,7 @@ class Window(Window):
             self.show_popover_at_widget(self.search.searches, self.search, x, y)
             e.set_state(Gtk.EventSequenceState.CLAIMED)
             Task.invoke(e.reset)
-        if signal == "released" and w and w.get_ancestor(Adw.TabBar): return self.stack.set_visible_child(w.get_ancestor(Adw.TabBar).get_view())
+        if signal == "released" and w and w.get_ancestor(Adw.TabBar): return self.stack.set_visible_child(w.get_ancestor(Adw.TabBar).get_view().get_parent())
 
     @staticmethod
     def create(*_): return Window().stack.get_visible_child()
@@ -226,9 +226,9 @@ class Window(Window):
     @staticmethod
     def child_changed(s, p):
         for i in s:
-            if i == s.get_visible_child(): i.bar.add_css_class("visible")
-            else: i.bar.remove_css_class("visible")
-        if s.get_root(): Tab.changed(s.get_visible_child())
+            if i == s.get_visible_child(): Task.invoke(i.bar.add_css_class, "visible")
+            else: Task.invoke(i.bar.remove_css_class, "visible")
+        if s.get_root(): Task.invoke(s.get_visible_child().page_changed)
 
     @staticmethod
     def clipboard_read_value(cl, r):
@@ -287,17 +287,33 @@ class Window(Window):
         e.set_actions(Gdk.DragAction.NONE)
         if hasattr(self, "highlight") and self.highlight: self.highlight.remove_css_class("highlight")
 
-class Tab(Adw.Bin):
-    @GObject.Property(type=str, flags=GObject.ParamFlags.READWRITE)
+class View(DataTabView):
+    def page_changed(self):
+        if not self.get_mapped() or not self.current: return
+        tab = self.current
+        first_setup = not tab.webview and tab.tab
+        if first_setup:
+            if tab.uri.startswith("magnet:?"): open_files([tab.uri])
+            else: tab.setup_view()
+        if not first_setup and isinstance(tab.get_child(), Adw.Spinner): Task.invoke(tab.webview.load_uri, tab.uri)
+        else: Task.invoke(tab.sync)
+
+class Tab(DataWindowTabViewTab):
+    @GObject.Property(type=str, nick="URI")
     def uri(self): return getattr(self, "_uri", "")
 
     @uri.setter
     def uri(self, value):
-        if self.uri == "Transmission": return
+        if self.uri == "Transmission":
+            self.update("URI", self.uri)
+            return
         if value and "youtube.com" in value and "&pp=" in value:
             value = value.split("&pp=", 1)
             value = value[0] + (value[1].split("&", 1)[-1] if "&" in value[1] else "")
         self._uri = value or ""
+        self.update("URI", self.uri)
+
+    properties = ["uri"]
 
     closed = []
     requests = {}
@@ -305,20 +321,17 @@ class Tab(Adw.Bin):
 
     muted = GObject.Property(type=bool, default=False)
     ephemeral = GObject.Property(type=bool, default=False)
-    tab = GObject.Property(type=Adw.TabPage)
     webview = GObject.Property(type=WebKit.WebView)
 
     context_menu = Menu({"!a": Menu({"New Tab": "new-tab", "New Window": "new-window", "Reopen Closed Tab": "reopen-tab"}), "!b": Menu()})
 
     def __init__(self, view=False, webview=False, uri=False):
-        super().__init__(css_name=self.__class__.__name__.lower())
         v = view or Window.current.stack.get_visible_child()
         view = view or Window.current.stack.get_first_child()
         current_tab = v.get_selected_page().get_child() if v.get_selected_page() else False
         if uri == False:
             uri = current_tab.uri if current_tab else ""
-        self.uri = uri
-        self.tab = view.add_page(self, current_tab.tab if current_tab else None) if view.get_mapped() else view.append(self)
+        super().__init__(view=view, uri=uri, css_name="tab")
         if current_tab and current_tab.webview and current_tab.webview.get_network_session() != NetworkSession():
             webview = current_tab.webview
             self.ephemeral = True
@@ -356,7 +369,7 @@ class Tab(Adw.Bin):
         return t
 
     @staticmethod
-    def create(*_, view=False, webview=None, uri=False): return Tab(view=view if isinstance(view, Adw.TabView) else False, webview=False, uri=uri)
+    def create(*_, view=False, webview=None, uri=False): return Tab(view=view, webview=False, uri=uri)
 
     @staticmethod
     def setup_menu(v, t):
@@ -478,31 +491,16 @@ class Tab(Adw.Bin):
         if q: Tab.add_searches(q, v)
 
     @staticmethod
-    def changed(view, *_):
-        if not view.get_mapped(): return
-        w = view.get_root()
-        if not w: return
-        if not view.get_selected_page(): return
-        self = view.get_selected_page().get_child()
-        first_setup = not self.webview and self.tab
-        if first_setup:
-            if self.uri.startswith("magnet:?"): open_files([self.uri])
-            else: self.setup_view()
-        if not first_setup and isinstance(self.get_child(), Adw.Spinner): Task.invoke(self.webview.load_uri, self.uri)
-        else: Task.invoke(self.sync)
-
-    @staticmethod
     def operation(a, b=False, t=False):
-        view = a if isinstance(a, Adw.TabView) else App.default.get_active_window().stack.get_visible_child()
+        view = a.get_parent() if isinstance(a, Adw.TabView) else App.default.get_active_window().stack.get_visible_child()
         if not t:
             t = b if isinstance(b, Adw.TabPage) else view.get_root().context_tab if "context" in a.get_name() else view.get_selected_page()
             t = t.get_child()
         if not t: return
-        view = t.get_ancestor(Adw.TabView)
-        if isinstance(a, Adw.TabView) or isinstance(a, Gio.SimpleAction) and "close-tab" in a.get_name():
+        view = t.get_ancestor(View)
+        if isinstance(a, View) or isinstance(a, Gio.SimpleAction) and "close-tab" in a.get_name():
             view.close_page(t.tab) if isinstance(a, Gio.SimpleAction) else None
             Tab.closed.append(t.uri)
-
             App.default.lookup_action("reopen-tab").set_enabled(bool(Tab.closed))
             Task.invoke(t.unload)
         if "set-preferred-languages" in a.get_name():
@@ -575,22 +573,12 @@ class Tab(Adw.Bin):
         t.get_ancestor(Adw.TabView).set_selected_page(t.tab)
 
     @staticmethod
-    def idle_save_all(*_): Task.invoke(Tab.get_all, save=True)
-
-    @staticmethod
-    def get_all(save=False):
+    def get_all():
         tabs = []
         for w in App.default.get_windows():
             if not isinstance(w, Window) or save and not w.get_mapped(): continue
-            for __id, v in enumerate(w.stack):
-                for ___id, i in enumerate(v.get_pages()):
-                    if save:
-                        i.get_child().data = (w.get_id(), __id, ___id)
-                    tabs.append(i.get_child())
-        if save and Window.current and Window.current.get_mapped():
-            for i in tabs:
-                if i.data[1] == 0 and i.data[2] == 0: App.default.data.delete(table="Tabs", conditions="Window = ?", conds=(i.data[0],))
-                App.default.data.new(table="Tabs", values=(i.data[0], i.data[1] + 1, i.data[2] + 1, i.uri))
+            for v in w.stack:
+                for i in v: tabs.append(i)
         return tabs
 
     @staticmethod
@@ -861,7 +849,6 @@ class Search(Adw.Bin):
             t.webview.load_uri(self.search.get_text())
             self.search.search = ""
             Task.invoke(self.search.toggle)
-            Tab.idle_save_all()
             return True
 
     @staticmethod
@@ -947,21 +934,24 @@ class ExtraSettings(Adw.PreferencesDialog):
         for i in groups: page.add(i)
         self.zoom = Adw.SpinRow.new_with_range(0.1, 100.0, 0.1)
         self.zoom.set_title("Zoom")
-        self.zoom.set_value(float(Data.setting(self.zoom.get_title(), 1.0)))
-        self.preferred_languages = TagRow(title="Preferred Languages", tags=Data.setting("Preferred Languages", "").split(", "))
+        v = DataSetting["Zoom"]
+        self.zoom.set_value(float(v if v != None else 1.0))
+        self.preferred_languages = TagRow(title="Preferred Languages", tags=(DataSetting["Preferred Languages"] or "").split(", "))
         c = [i.strip() for i in self.preferred_languages.tags] if self.preferred_languages.tags else None
         WebContext.default.preferred_languages = c
         self.background_color = ColorRow(title="Background Color")
-        self.background_color.set_rgba(RGBA(Data.setting(self.background_color.get_title(), "#ffffff")))
+        self.background_color.set_rgba(RGBA(DataSetting[self.background_color.get_title()] or "#ffffff"))
         self.cache_model = Adw.ComboRow(title="Cache Model", model=Gtk.StringList.new([i.replace("_", " ").title() for i in dir(WebKit.CacheModel) if i.isupper()]))
-        self.load_bar = Adw.SwitchRow(title="Load Bar", active=Data.setting("Load Bar", True))
+        v = DataSetting["Load Bar"]
+        self.load_bar = Adw.SwitchRow(title="Load Bar", active=v if v != None else True)
         for i, t in ((self.preferred_languages, "notify::tags"), (self.zoom, "changed"), (self.background_color, "notify::rgba"), (self.cache_model, "notify::selected"), (self.load_bar, "notify::active")):
             i.connect(t, self.__class__.view_changed)
             groups[1 if i in (self.preferred_languages, self.cache_model) else 0].add(i if isinstance(i, Adw.PreferencesRow) else Adw.PreferencesRow(child=i))
-        self.cache_model.set_selected(self.cache_model.get_model().find(Data.setting(self.cache_model.get_title(), "Web Browser")))
+        self.cache_model.set_selected(self.cache_model.get_model().find(DataSetting[self.cache_model.get_title()] or "Web Browser"))
         for i in self.settings.list_properties():
             if GObject.ParamFlags.DEPRECATED in i.flags: continue
-            default = Data.setting(i.name, self.settings.get_property(i.name))
+            default = DataSetting[i.name]
+            default = default if default != None else self.settings.get_property(i.name)
             t = str(i.value_type)
             if i.name == "hardware-acceleration-policy":
                 w = Adw.ComboRow(model=Gtk.StringList.new(("Always", "Never")))
@@ -991,7 +981,8 @@ class ExtraSettings(Adw.PreferencesDialog):
                 groups[-1].add(w)
 
     @staticmethod
-    def setting_changed(r, p=None): Data.setting(r.get_name(), None, r.get_property(r.v))
+    def setting_changed(r, p=None):
+        DataSetting[r.get_name()] = r.get_property(r.v)
 
     @staticmethod
     def view_changed(r, p=None):
@@ -999,7 +990,7 @@ class ExtraSettings(Adw.PreferencesDialog):
             c = [i.strip() for i in r.tags] if r.tags else None
             WebContext.default.preferred_languages = c
         if r.get_title() == "Cache Model": WebContext.default.set_cache_model(next((getattr(WebKit.CacheModel, i) for i in dir(WebKit.CacheModel) if i == r.get_selected_item().get_string().upper().replace(" ", "_")), WebKit.CacheModel.WEB_BROWSER))
-        Data.setting(r.get_title(), "" if isinstance(r, TagRow) else None, r.get_rgba().to_string() if isinstance(r, ColorRow) else r.get_value() if isinstance(r, Adw.SpinRow) else r.get_active() if isinstance(r, Adw.SwitchRow) else r.get_text() if isinstance(r, Adw.EntryRow) else ", ".join(r.tags) if isinstance(r, TagRow) else r.get_selected_item().get_string())
+        DataSetting[r.get_title()] = r.get_rgba().to_string() if isinstance(r, ColorRow) else r.get_value() if isinstance(r, Adw.SpinRow) else r.get_active() if isinstance(r, Adw.SwitchRow) else r.get_text() if isinstance(r, Adw.EntryRow) else ", ".join(r.tags) if isinstance(r, TagRow) else r.get_selected_item().get_string()
 
     @staticmethod
     def show(*_):
@@ -1039,7 +1030,9 @@ class WebKitFeatures(Adw.Dialog):
             s = i.get_status().name.title()
             if not s in categories[i.get_category()].groups:
                 categories[i.get_category()].groups[s] = Adw.PreferencesGroup(title=s)
-            w = Adw.SwitchRow(subtitle=GLib.markup_escape_text(i.get_details()) if i.get_details() else "", name=i.get_identifier(), active=Data.setting(i.get_identifier(), i.get_default_value()))
+            v = DataSetting[i.get_identifier()]
+            v = v if v != None else i.get_default_value()
+            w = Adw.SwitchRow(subtitle=GLib.markup_escape_text(i.get_details()) if i.get_details() else "", name=i.get_identifier(), active=v)
             w.feature = i
             self.__class__.setting_changed(w)
             w.connect("notify::active", self.__class__.setting_changed)
@@ -1088,7 +1081,8 @@ class WebKitFeatures(Adw.Dialog):
         name = GLib.markup_escape_text(r.feature.get_name() or r.feature.get_identifier())
         r.set_title(name if r.get_active() == r.feature.get_default_value() else "<b>" + name + "</b>")
         WebKitFeatures.settings.default.set_feature_enabled(r.feature, r.get_active())
-        if not p == None: Data.setting(r.get_name(), None, r.get_active())
+        if not p == None:
+            DataSetting[r.get_name()] = r.get_active()
 
     @staticmethod
     def nav_bind(b, v): return "narrow" in v
@@ -1106,7 +1100,7 @@ class SiteDataExceptions(Adw.Dialog):
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar())
         super().__init__(title="Site Data Exceptions", content_height=600, content_width=600, child=Adw.ToastOverlay(child=toolbar))
-        t = Data.setting("SiteDataExceptions", "")
+        t = DataSetting["SiteDataExceptions"]
         self.tags = TagRow(title="Site", tags=t.split(", ") if t else [])
         self.tags.connect("notify::tags", self.__class__.tags_changed)
         group = Adw.PreferencesGroup()
@@ -1116,7 +1110,8 @@ class SiteDataExceptions(Adw.Dialog):
         toolbar.set_content(page)
 
     @staticmethod
-    def tags_changed(*_): Data.setting("SiteDataExceptions", "", ", ".join(App.default.site_data_exceptions.tags.tags))
+    def tags_changed(*_):
+        DataSetting["SiteDataExceptions"] = ", ".join(App.default.site_data_exceptions.tags.tags)
 
     @staticmethod
     def show(*_):
@@ -1133,7 +1128,7 @@ class SiteDataExceptions(Adw.Dialog):
 
     @staticmethod
     def finish_fetch(a, r, e=None):
-        data = [i for i in a.fetch_finish(r) if not i.get_name() in Data.setting("SiteDataExceptions", "").split(", ")]
+        data = [i for i in a.fetch_finish(r) if not i.get_name() in (DataSetting["SiteDataExceptions"] or "").split(", ")]
         if data: a.remove(WebKit.WebsiteDataTypes.ALL, data, None, SiteDataExceptions.remove_finish, e)
         elif e: e.set()
 
@@ -1417,13 +1412,6 @@ class UserContentManager:
 
 def id_sort(i): return i["ID"]
 
-def start():
-    d = App.default.data.read(table="Windows", column="ID", force_tuple=True)
-    if not d:
-        App.default.data.set_default(table="Windows", conditions="ID = '1'", values=(1,), names=("ID",))
-        d = [1]
-    for i in d: Window(i)
-
 def activate(a):
     if a.get_active_window(): a.get_active_window().present()
     else: return open_files(ARGS[1:])
@@ -1459,7 +1447,7 @@ def reopen_tab(*_):
 def window_removed(a, w):
     if not isinstance(w, Window): return
     for v in w.stack:
-        for i in v.get_pages(): i.get_child().unload(force=True)
+        for i in v: i.unload(force=True)
     if not a.get_active_window(): return
     App.default.data.delete(table="Windows", conditions="ID = ?", conds=(w.get_id(),))
 
@@ -1501,8 +1489,7 @@ def open_transmission(*_):
     t.get_ancestor(Adw.TabView).set_selected_page(t.tab)
 
 def open_files(files):
-    if not Window.current: start()
-    t = None
+    if not Window.current: Window.restore(new=True)
     for i in files:
         i = i if isinstance(i, str) else i.get_uri() if hasattr(i, "get_uri") else str(i)
         if i.startswith("magnet:?") or Gio.content_type_guess(i)[0] == "application/x-bittorrent":
@@ -1610,10 +1597,7 @@ SHORTCUTS = {
         }
 }
 
-DATA_INIT = (SearchObject, DataSetting, """
-CREATE TABLE IF NOT EXISTS Tabs (Window INTEGER NOT NULL DEFAULT 1, TabView INTEGER NOT NULL DEFAULT 1, ID INTEGER, URI TEXT DEFAULT '', UNIQUE ('Window', 'TabView', 'ID'), FOREIGN KEY (Window) REFERENCES Windows(ID) ON DELETE CASCADE ON UPDATE CASCADE);
-CREATE TABLE IF NOT EXISTS Windows (ID INTEGER PRIMARY KEY AUTOINCREMENT, 'Default Width' INTEGER NOT NULL DEFAULT 360, 'Default Height' INTEGER NOT NULL DEFAULT 760, 'Fullscreen' INTEGER NOT NULL DEFAULT 0, 'Second View' INTEGER NOT NULL DEFAULT 1, Maximized INTEGER NOT NULL DEFAULT 0);
-""")
+DATA_INIT = (SearchObject, DataSetting, Tab, Window)
 
 ACTIONS = [
     ("open-transmission", open_transmission),
