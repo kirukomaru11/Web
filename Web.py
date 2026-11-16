@@ -576,7 +576,7 @@ class Tab(DataWindowTabViewTab):
     def get_all():
         tabs = []
         for w in App.default.get_windows():
-            if not isinstance(w, Window) or save and not w.get_mapped(): continue
+            if not isinstance(w, Window): continue
             for v in w.stack:
                 for i in v: tabs.append(i)
         return tabs
